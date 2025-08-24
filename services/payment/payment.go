@@ -36,8 +36,12 @@ type IPaymentService interface {
 	Webhook(context.Context, *dto.WebHook) error
 }
 
-func NewPaymentService(repository repositories.IRepositoryRegistry) *PaymentService {
-	return &PaymentService{repository: repository}
+func NewPaymentService(repository repositories.IRepositoryRegistry, kafka kafka.IKafkaRegistry, midtrans clients.IMidtransClient) *PaymentService {
+	return &PaymentService{
+		repository: repository,
+		kafka:      kafka,
+		midtrans:   midtrans,
+	}
 }
 
 func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) (*util.PaginationResult, error) {
@@ -291,6 +295,100 @@ func (p *PaymentService) produceToKafka(request *dto.WebHook, payment *models.Pa
 	return nil
 }
 
-func (p *PaymentService) Webhook(ctx context.Context, hook *dto.WebHook) error {
-	
+func (p *PaymentService) Webhook(ctx context.Context, request *dto.WebHook) error {
+	var (
+		txErr, err         error
+		paymentAfterUpdate *models.Payment
+		paidAt             *time.Time
+		invoiceLink        string
+		pdf                []byte
+	)
+
+	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
+		_, err = p.repository.GetPayment().FindByOrderID(ctx, request.OrderID.String())
+		if err != nil {
+			return txErr
+		}
+
+		if request.TransactionStatus == constants.SettlementString {
+			now := time.Now()
+			paidAt = &now
+		}
+
+		status := request.TransactionStatus.GetStatusInt()
+		vaNumber := request.VANumbers[0].VaNumber
+		bank := request.VANumbers[0].Bank
+		paymentAfterUpdate, txErr = p.repository.GetPayment().Update(ctx, tx, request.OrderID.String(), &dto.UpdatePaymentRequest{
+			TransactionID: &request.TransactionID,
+			Status:        &status,
+			PaidAt:        paidAt,
+			VANumber:      &vaNumber,
+			Bank:          &bank,
+			Acquirer:      request.Acquirer,
+		})
+
+		if txErr != nil {
+			return txErr
+		}
+
+		txErr = p.repository.GetPaymentHistory().Create(ctx, tx, &dto.PaymentHistoryRequest{
+			PaymentID: paymentAfterUpdate.ID,
+			Status:    paymentAfterUpdate.Status.GetStatusString(),
+		})
+
+		if request.TransactionStatus == constants.SettlementString {
+			paidDay := paidAt.Format("02")
+			paidMonth := p.convertToIndonesianMonth(paidAt.Format("January"))
+			paidYear := paidAt.Format("2006")
+			invoiceNumber := fmt.Sprintf("INV/%s/ORD/%d", time.Now().Format(time.DateOnly), p.randomNumber())
+			total := util.RupiahFormat(&paymentAfterUpdate.Amount)
+			invoiceRequest := &dto.InvoiceRequest{
+				InvoiceNumber: invoiceNumber,
+				Data: dto.InvoiceData{
+					PaymentDetail: dto.InvoicePaymentDetail{
+						PaymentMethod: request.PaymentType,
+						BankName:      strings.ToUpper(*paymentAfterUpdate.Bank),
+						VANumber:      *paymentAfterUpdate.VANumber,
+						Date:          fmt.Sprintf("%s %s %s", paidDay, paidMonth, paidYear),
+						IsPaid:        true,
+					},
+					Items: []dto.InvoiceItem{
+						{
+							Description: *paymentAfterUpdate.Description,
+							Price:       total,
+						},
+					},
+					Total: total,
+				},
+			}
+			pdf, txErr = p.generatePDF(invoiceRequest)
+			if txErr != nil {
+				return txErr
+			}
+
+			invoiceLink, txErr = p.uploadFile(ctx, invoiceNumber, pdf)
+			if txErr != nil {
+				return txErr
+			}
+
+			_, txErr = p.repository.GetPayment().Update(ctx, tx, request.OrderID.String(), &dto.UpdatePaymentRequest{
+				InvoiceLink: &invoiceLink,
+			})
+			if txErr != nil {
+				return txErr
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = p.produceToKafka(request, paymentAfterUpdate, paidAt)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
