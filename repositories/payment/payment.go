@@ -113,7 +113,7 @@ func (p *PaymentRepository) Create(ctx context.Context, tx *gorm.DB, request *dt
 		OrderID:     orderID,
 		Amount:      request.Amount,
 		PaymentLink: request.PaymentLink,
-		ExpiredAt:   request.ExpiredAt,
+		ExpiredAt:   &request.ExpiredAt,
 		Description: request.Description,
 		Status:      &status,
 	}

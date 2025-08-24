@@ -2,7 +2,13 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"gorm.io/gorm"
+	"math/rand"
+	"os"
+	"path/filepath"
 	clients "payment-service/clients/midtrans"
 	"payment-service/common/util"
 	errPayment "payment-service/constants/error/payment"
@@ -10,6 +16,8 @@ import (
 	"payment-service/domain/dto"
 	"payment-service/domain/models"
 	"payment-service/repositories"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -142,6 +150,94 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 	}
 
 	return response, nil
+}
+
+func (p *PaymentService) convertToIndonesianMonth(englishMonth string) string {
+	monthMap := map[string]string{
+		"January":   "Januari",
+		"February":  "Februari",
+		"March":     "Maret",
+		"April":     "April",
+		"May":       "Mei",
+		"June":      "Juni",
+		"July":      "Juli",
+		"August":    "Agustus",
+		"September": "September",
+		"October":   "Oktober",
+		"November":  "November",
+		"December":  "Desember",
+	}
+
+	indonesianMonth, ok := monthMap[englishMonth]
+	if !ok {
+		return errors.New("month not found").Error()
+	}
+
+	return indonesianMonth
+}
+
+func (p *PaymentService) generatePDF(request *dto.InvoiceRequest) ([]byte, error) {
+	htmlTemplatePath := "template/invoice.html"
+	htmlTemplate, err := os.ReadFile(htmlTemplatePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var data map[string]interface{}
+	jsonData, _ := json.Marshal(request)
+	err = json.Unmarshal(jsonData, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	pdf, err := util.GeneratePDFFromHTML(string(htmlTemplate), data)
+	if err != nil {
+		return nil, err
+	}
+
+	return pdf, nil
+}
+
+func (p *PaymentService) uploadFile(ctx context.Context, invoiceNumber string, pdf []byte) (string, error) {
+	if len(pdf) == 0 {
+		return "", errors.New("pdf kosong")
+	}
+
+	baseDir := "invoice"
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		return "", fmt.Errorf("gagal membuat folder %q: %w", baseDir, err)
+	}
+
+	clean := strings.ToLower(invoiceNumber)
+	clean = strings.ReplaceAll(clean, "/", "")
+	clean = strings.ReplaceAll(clean, `\`, "")
+	re := regexp.MustCompile(`[^a-z0-9-_]+`)
+	clean = strings.Trim(re.ReplaceAllString(clean, "-"), "-_")
+	if clean == "" {
+		clean = "invoice"
+	}
+
+	ts := time.Now().Format("20060102150405")
+	filename := fmt.Sprintf("%s-%s.pdf", clean, ts)
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	fullPath := filepath.Join(baseDir, filename)
+	if err := os.WriteFile(fullPath, pdf, 0o644); err != nil {
+		return "", fmt.Errorf("gagal menyimpan file: %w", err)
+	}
+
+	return filepath.ToSlash(fullPath), nil
+}
+
+func (p *PaymentService) randomNumber() int {
+	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	number := random.Intn(900000) + 100000
+	return number
 }
 
 func (p *PaymentService) Webhook(ctx context.Context, hook *dto.WebHook) error {
