@@ -23,8 +23,8 @@ type KafkaData struct {
 }
 
 type KafkaBody struct {
-	Type string    `json:"type"`
-	Data KafkaData `json:"data"`
+	Type string     `json:"type"`
+	Data *KafkaData `json:"data"`
 }
 
 type KafkaMessage struct {
