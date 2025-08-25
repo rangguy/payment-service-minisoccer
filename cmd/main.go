@@ -9,10 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"net/http"
 	"payment-service/clients"
+	midtransClient "payment-service/clients/midtrans"
 	"payment-service/common/response"
 	"payment-service/config"
 	"payment-service/constants"
-	"payment-service/controllers"
+	"payment-service/controllers/http"
+	kafkaClient "payment-service/controllers/kafka"
 	"payment-service/domain/models"
 	"payment-service/middlewares"
 	"payment-service/repositories"
@@ -39,16 +41,18 @@ var command = &cobra.Command{
 		time.Local = loc
 
 		err = db.AutoMigrate(
-			&models.Field{},
-			&models.FieldSchedule{},
-			&models.Time{},
+			&models.Payment{},
+			&models.PaymentHistory{},
 		)
 		if err != nil {
 			panic(err)
 		}
+
+		kafka := kafkaClient.NewKafkaRegistry(config.Config.Kafka.Brokers)
+		midtrans := midtransClient.NewMidtransClient(config.Config.Midtrans.ServerKey, config.Config.Midtrans.IsProduction)
 		client := clients.NewClientRegistry()
 		repository := repositories.NewRepositoryRegistry(db)
-		service := services.NewServiceRegistry(repository)
+		service := services.NewServiceRegistry(repository, kafka, midtrans)
 		controller := controllers.NewControllerRegistry(service)
 
 		router := gin.Default()
@@ -62,7 +66,7 @@ var command = &cobra.Command{
 		router.GET("/", func(c *gin.Context) {
 			c.JSON(http.StatusOK, response.Response{
 				Status:  constants.Success,
-				Message: "Welcome to Field Service",
+				Message: "Welcome to Payment Service",
 			})
 		})
 		router.Use(func(c *gin.Context) {
@@ -81,7 +85,7 @@ var command = &cobra.Command{
 		router.Use(middlewares.RateLimiter(lmt))
 
 		group := router.Group("/api/v1")
-		route := routes.NewRouteRegistry(group, controller, client)
+		route := routes.NewRouteRegistry(controller, group, client)
 		route.Serve()
 
 		port := fmt.Sprintf(":%d", config.Config.Port)
