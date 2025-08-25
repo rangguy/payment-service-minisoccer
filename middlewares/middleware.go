@@ -4,17 +4,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"field-service/clients"
-	"field-service/common/response"
-	"field-service/config"
-	"field-service/constants"
-	errConstant "field-service/constants/error"
 	"fmt"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"payment-service/clients"
+	"payment-service/common/response"
+	"payment-service/config"
+	"payment-service/constants"
+	errConstant "payment-service/constants/error"
 	"strings"
 )
 
@@ -125,18 +125,6 @@ func Authenticate() gin.HandlerFunc {
 		tokenString := extractBearerToken(token)
 		tokenUser := c.Request.WithContext(context.WithValue(c.Request.Context(), constants.Token, tokenString))
 		c.Request = tokenUser
-
-		c.Next()
-	}
-}
-
-func AuthenticateWithoutToken() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		err := validateAPIKey(c)
-		if err != nil {
-			responseUnauthorized(c, err.Error())
-			return
-		}
 
 		c.Next()
 	}

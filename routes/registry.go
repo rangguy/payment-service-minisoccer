@@ -1,12 +1,10 @@
 package routes
 
 import (
-	"field-service/clients"
-	"field-service/controllers"
-	fieldRoute "field-service/routes/field"
-	fieldScheduleRoute "field-service/routes/field_schedule"
-	timeRoute "field-service/routes/time"
 	"github.com/gin-gonic/gin"
+	"payment-service/clients"
+	controllers "payment-service/controllers/http"
+	routes "payment-service/routes/payment"
 )
 
 type Registry struct {
@@ -15,32 +13,18 @@ type Registry struct {
 	client     clients.IClientRegistry
 }
 
-type IRouterRegistry interface {
+type IRouteRegistry interface {
 	Serve()
 }
 
-func NewRouteRegistry(group *gin.RouterGroup, controller controllers.IControllerRegistry, client clients.IClientRegistry) IRouterRegistry {
-	return &Registry{
-		group:      group,
-		controller: controller,
-		client:     client,
-	}
+func NewRouteRegistry(controller controllers.IControllerRegistry) IRouteRegistry {
+	return &Registry{controller: controller}
 }
 
 func (r *Registry) Serve() {
-	r.fieldRoute().Run()
-	r.fieldScheduleRoute().Run()
-	r.timeRoute().Run()
+	r.paymentRoute().Run()
 }
 
-func (r *Registry) fieldRoute() fieldRoute.IFieldRoute {
-	return fieldRoute.NewFieldRoute(r.group, r.controller, r.client)
-}
-
-func (r *Registry) fieldScheduleRoute() fieldScheduleRoute.IFieldScheduleRoute {
-	return fieldScheduleRoute.NewFieldScheduleRoute(r.group, r.controller, r.client)
-}
-
-func (r *Registry) timeRoute() timeRoute.ITimeRoute {
-	return timeRoute.NewTimeRoute(r.group, r.controller, r.client)
+func (r *Registry) paymentRoute() routes.IPaymentRoute {
+	return routes.NewPaymentRoute(r.group, r.controller, r.client)
 }
