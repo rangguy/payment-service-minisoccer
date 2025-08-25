@@ -192,7 +192,6 @@ func GeneratePDFFromHTML(htmlTemplate string, data any) ([]byte, error) {
 	}
 
 	htmlContent := filledTemplate.String()
-
 	pdfGenerator, err := wkhtmltopdf.NewPDFGenerator()
 	if err != nil {
 		logrus.Errorf("failed to create pdf generator: %v", err)

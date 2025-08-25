@@ -7,21 +7,21 @@ import (
 )
 
 type Payment struct {
-	ID               uint                     `gorm:"primaryKey;autoIncrement" `
+	ID               uint                     `gom:"primaryKey;autoIncrement"`
 	UUID             uuid.UUID                `gorm:"type:uuid;not null"`
 	OrderID          uuid.UUID                `gorm:"type:uuid;not null"`
 	Amount           float64                  `gorm:"not null"`
 	Status           *constants.PaymentStatus `gorm:"not null"`
 	PaymentLink      string                   `gorm:"type:varchar(255);not null"`
-	InvoiceLink      *string                  `gorm:"type:varchar(255);not null"`
-	VANumber         *string                  `gorm:"type:varchar(50);not null"`
-	Bank             *string                  `gorm:"type:varchar(100);not null"`
-	Acquirer         *string                  `gorm:"type:varchar(100);not null"`
-	TransactionID    *string                  `gorm:"type:varchar(255);not null"`
-	Description      *string                  `gorm:"type:text;not null"`
-	PaidAt           *time.Time               `gorm:"type:timestamp"`
-	ExpiredAt        *time.Time               `gorm:"type:timestamp"`
-	CreatedAt        *time.Time               `gorm:"type:timestamp;not null"`
-	UpdatedAt        *time.Time               `gorm:"type:timestamp;not null"`
-	PaymentHistories []PaymentHistory         `gorm:"foreignKey:payment_id;references:id;OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	InvoiceLink      *string                  `gorm:"type:varchar(255);default:null"`
+	VANumber         *string                  `gorm:"type:varchar(50);default:null"`
+	Bank             *string                  `gorm:"type:varchar(100);default:null"`
+	Acquirer         *string                  `gorm:"type:varchar(100);default:null"`
+	TransactionID    *string                  `gorm:"type:varchar(100);default:null"`
+	Description      *string                  `gorm:"type:text;default:null"`
+	PaidAt           *time.Time
+	ExpiredAt        *time.Time
+	CreatedAt        *time.Time
+	UpdatedAt        *time.Time
+	PaymentHistories []PaymentHistory `gorm:"foreignKey:payment_id;references:id;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }

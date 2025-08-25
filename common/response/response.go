@@ -1,10 +1,10 @@
 package response
 
 import (
-	"field-service/constants"
-	errConstant "field-service/constants/error"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"payment-service/constants"
+	errConstant "payment-service/constants/error"
 )
 
 type Response struct {

@@ -276,6 +276,7 @@ func (p *PaymentService) produceToKafka(request *dto.WebHook, payment *models.Pa
 			PaymentID: payment.UUID,
 			Status:    request.TransactionStatus.String(),
 			PaidAt:    paidAt,
+			ExpiredAt: *payment.ExpiredAt,
 		},
 	}
 
@@ -318,7 +319,7 @@ func (p *PaymentService) Webhook(ctx context.Context, request *dto.WebHook) erro
 		status := request.TransactionStatus.GetStatusInt()
 		vaNumber := request.VANumbers[0].VaNumber
 		bank := request.VANumbers[0].Bank
-		paymentAfterUpdate, txErr = p.repository.GetPayment().Update(ctx, tx, request.OrderID.String(), &dto.UpdatePaymentRequest{
+		_, txErr = p.repository.GetPayment().Update(ctx, tx, request.OrderID.String(), &dto.UpdatePaymentRequest{
 			TransactionID: &request.TransactionID,
 			Status:        &status,
 			PaidAt:        paidAt,
@@ -328,6 +329,11 @@ func (p *PaymentService) Webhook(ctx context.Context, request *dto.WebHook) erro
 		})
 
 		if txErr != nil {
+			return txErr
+		}
+
+		paymentAfterUpdate, err = p.repository.GetPayment().FindByOrderID(ctx, request.OrderID.String())
+		if err != nil {
 			return txErr
 		}
 

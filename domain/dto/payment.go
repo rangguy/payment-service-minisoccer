@@ -77,7 +77,7 @@ type WebHook struct {
 	PaymentAmount     []PaymentAmount               `json:"payment_amount"`
 	OrderID           uuid.UUID                     `json:"order_id"`
 	MerchantID        string                        `json:"merchant_id"`
-	GrossAmount       float64                       `json:"gross_amount"`
+	GrossAmount       string                        `json:"gross_amount"`
 	FraudStatus       string                        `json:"fraud_status"`
 	Currency          string                        `json:"currency"`
 	Acquirer          *string                       `json:"acquirer"`
